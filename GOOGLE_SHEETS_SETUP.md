@@ -83,13 +83,13 @@ function doGet(e) {
 `src/App.tsx` dosyasında `GOOGLE_SCRIPT_URL` değişkenini güncelleyin:
 
 ```javascript
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyB6zAKjK1-0VFbGENo6yOnyueaGGDcEJv4c4N-9HWf6koB4acud6dize3V7Qg5C15KGA/exec';
+const GOOGLE_SCRIPT_URL = '';
 ```
 
 ## 5. Sheet ID'sini Bulma
 
 Google Sheets URL'inize bakın:
-`https://docs.google.com/spreadsheets/d/1ONhpP28_u-4Y0YqbSByPwH2_rlLlm8YnKFmfkHwhOT8/edit?gid=0#gid=0`
+`https://script.google.com/macros/library/d/1uMEf1Je_WtEoQlpWnJwLKx967hz3XcH7ISnQI34AWD0RdAzwMUk7cO8k/3`
 
 Bu ID'yi Apps Script kodundaki `YOUR_SHEET_ID` yerine yapıştırın.
 

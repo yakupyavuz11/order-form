@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Package, Truck, User, Phone, FileText, Plus, Trash2, Send, CheckCircle, AlertTriangle, Info, MessageSquare } from 'lucide-react';
 
+// Import Firebase config and Firestore functions
+import { db } from './firebase'; 
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+
 function App() {
   const [formData, setFormData] = useState({
     orderCreator: "",
@@ -27,7 +31,6 @@ function App() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Weight per pallet (in kg) for each product
   const productWeights = {
     "Gürpınar Pet 0,33 Lt.": 500,
     "Gürpınar Pet 0,50 Lt.": 750,
@@ -46,17 +49,13 @@ function App() {
     "Kızılay Bardak 250 ml.": 350,
   };
 
-  // Akıllı araç tipi önerisi
   const getRecommendedVehicleType = (totalWeight) => {
     if (totalWeight <= 15000) return "kamyon";
     return "tır";
   };
 
-  // Uyarıları kontrol et
   const checkWarnings = () => {
     const newWarnings = [];
-    
-    // Eksik bilgi uyarıları
     if (!formData.orderCreator) {
       newWarnings.push({ type: 'error', message: 'Sipariş oluşturan kişi seçilmedi!' });
     }
@@ -72,8 +71,6 @@ function App() {
     if (!formData.shipmentType) {
       newWarnings.push({ type: 'error', message: 'Sevk tipi seçilmedi!' });
     }
-
-    // Sevk tipine göre eksik bilgiler
     if (formData.shipmentType === "kendisi") {
       if (!formData.vehiclePlate.trim()) {
         newWarnings.push({ type: 'error', message: 'Araç plakası girilmedi!' });
@@ -85,7 +82,6 @@ function App() {
         newWarnings.push({ type: 'error', message: 'Şoför telefonu girilmedi!' });
       }
     }
-    
     if (formData.shipmentType === "biz") {
       if (!formData.recipientName.trim()) {
         newWarnings.push({ type: 'error', message: 'Teslimat kişi adı girilmedi!' });
@@ -94,47 +90,33 @@ function App() {
         newWarnings.push({ type: 'error', message: 'Teslimat telefonu girilmedi!' });
       }
     }
-
-    // Ağırlık uyarıları
     const totalWeight = products.reduce((sum, product) => sum + product.weight, 0);
     if (totalWeight > 26500) {
       newWarnings.push({ type: 'error', message: 'Toplam ağırlık 26.500 kg sınırını aşıyor!' });
     } else if (totalWeight > 24000) {
       newWarnings.push({ type: 'warning', message: 'Ağırlık sınıra yaklaşıyor! Dikkatli olun.' });
     }
-
-    // Araç tipi önerisi
     const recommendedVehicle = getRecommendedVehicleType(totalWeight);
     if (formData.vehicleType && formData.vehicleType !== recommendedVehicle) {
       const vehicleName = recommendedVehicle === "kamyon" ? "Kamyon" : "Tır";
-      newWarnings.push({ 
-        type: 'info', 
-        message: `Bu ağırlık için ${vehicleName} önerilir! (${totalWeight.toLocaleString()} kg)` 
-      });
+      newWarnings.push({ type: 'info', message: `Bu ağırlık için ${vehicleName} önerilir! (${totalWeight.toLocaleString()} kg)` });
     }
-
-    // Telefon format uyarıları
     if (formData.driverPhone && !/^05\d{9}$/.test(formData.driverPhone.replace(/\s/g, ''))) {
       newWarnings.push({ type: 'warning', message: 'Şoför telefonu 05xxxxxxxxx formatında olmalı!' });
     }
     if (formData.recipientPhone && !/^05\d{9}$/.test(formData.recipientPhone.replace(/\s/g, ''))) {
       newWarnings.push({ type: 'warning', message: 'Teslimat telefonu 05xxxxxxxxx formatında olmalı!' });
     }
-
-    // Teslimat notu uyarısı
     if (formData.shipmentType === "biz" && !formData.deliveryNote.trim()) {
       newWarnings.push({ type: 'info', message: 'Teslimat notu eklemeniz önerilir!' });
     }
-
     setWarnings(newWarnings);
   };
 
-  // Form değişikliklerinde uyarıları kontrol et
   useEffect(() => {
     checkWarnings();
   }, [formData, products]);
 
-  // Otomatik araç tipi seçimi
   useEffect(() => {
     const totalWeight = products.reduce((sum, product) => sum + product.weight, 0);
     if (totalWeight > 0 && !formData.vehicleType) {
@@ -168,48 +150,24 @@ function App() {
   const maxWeight = 26500;
   const isOverWeight = totalWeight > maxWeight;
 
-  const sendToGoogleSheets = async (data) => {
-  const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyB6zAKjK1-0VFbGENo6yOnyueaGGDcEJv4c4N-9HWf6koB4acud6dize3V7Qg5C15KGA/exec';
-
-  try {
-    await fetch(GOOGLE_SCRIPT_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data),
-    });
-
-    console.log('Sipariş Google Sheets’e gönderildi');
-    return { success: true };
-  } catch (error) {
-    console.error('Gönderim hatası:', error);
-    return { success: false, error };
-  }
-};
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitStatus(null);
-    
-    // Kritik hataları kontrol et
+  
     const criticalErrors = warnings.filter(w => w.type === 'error');
     if (criticalErrors.length > 0) {
       alert("Lütfen önce tüm hataları düzeltin:\n" + criticalErrors.map(w => "• " + w.message).join("\n"));
       return;
     }
-
-    // Basit onay dialogu
+  
     const confirmSubmit = window.confirm("SİPARİŞ FORMUNU KAYDETMEYE EMİN MİSİN?");
     if (!confirmSubmit) {
       return;
     }
-    
+  
     setIsLoading(true);
     try {
       const dataToSend = {
-        timestamp: new Date().toISOString(),
         ...formData,
         vehiclePlate: formData.shipmentType === "kendisi" ? formData.vehiclePlate : null,
         driverName: formData.shipmentType === "kendisi" ? formData.driverName : null,
@@ -217,58 +175,38 @@ function App() {
         recipientName: formData.shipmentType === "biz" ? formData.recipientName : null,
         recipientPhone: formData.shipmentType === "biz" ? formData.recipientPhone : null,
         deliveryNote: formData.deliveryNote || null,
-        products: JSON.stringify(products),
+        products: products,
         totalWeight: totalWeight,
+        createdAt: serverTimestamp(), // Use Firebase server-side timestamp
       };
+
+      // Add a new document with a generated id to the "orders" collection
+      const docRef = await addDoc(collection(db, "orders"), dataToSend);
+      console.log("Document written to Firestore with ID: ", docRef.id);
+
+      setSubmitStatus('success');
+      alert('Sipariş başarıyla Firestore\'a kaydedildi!');
       
-      const result = await sendToGoogleSheets(dataToSend);
-      
-      if (result.success) {
-        setSubmitStatus('success');
-        setFormData({
-          orderCreator: "",
-          customerName: "",
-          vehicleType: "",
-          shipmentType: "",
-          vehiclePlate: "",
-          driverName: "",
-          driverPhone: "",
-          recipientName: "",
-          recipientPhone: "",
-          deliveryNote: "",
-        });
-        setProducts([]);
-        
-        setTimeout(() => setSubmitStatus(null), 5000);
-      } else {
-        setSubmitStatus('error');
-      }
+      // Reset form
+      setFormData({
+        orderCreator: "", customerName: "", vehicleType: "", shipmentType: "",
+        vehiclePlate: "", driverName: "", driverPhone: "", recipientName: "",
+        recipientPhone: "", deliveryNote: "",
+      });
+      setProducts([]);
+      setTimeout(() => setSubmitStatus(null), 5000);
+
     } catch (error) {
-      console.error("Error:", error);
+      console.error("Error adding document to Firestore: ", error);
       setSubmitStatus('error');
+      alert(`Hata: Sipariş kaydedilemedi. ${error.message}`);
     } finally {
       setIsLoading(false);
     }
   };
-
-  const getWarningIcon = (type) => {
-    switch (type) {
-      case 'error': return <AlertTriangle className="h-4 w-4" />;
-      case 'warning': return <AlertTriangle className="h-4 w-4" />;
-      case 'info': return <Info className="h-4 w-4" />;
-      default: return <Info className="h-4 w-4" />;
-    }
-  };
-
-  const getWarningColor = (type) => {
-    switch (type) {
-      case 'error': return 'bg-red-50 border-red-200 text-red-800';
-      case 'warning': return 'bg-yellow-50 border-yellow-200 text-yellow-800';
-      case 'info': return 'bg-blue-50 border-blue-200 text-blue-800';
-      default: return 'bg-gray-50 border-gray-200 text-gray-800';
-    }
-  };
-
+  
+  // (The rest of your component's JSX remains exactly the same)
+  // ... from <div className="min-h-screen..."> to </div>
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -305,8 +243,6 @@ function App() {
             </span>
           </div>
         )}
-
-        {/* Warnings Panel */}
 
         <form onSubmit={handleSubmit} className="space-y-8">
           {/* Basic Information */}
@@ -359,7 +295,6 @@ function App() {
               <h2 className="text-xl font-semibold text-gray-900">Ürün Bilgileri</h2>
             </div>
 
-            {/* Product Input */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <div className="md:col-span-1">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -403,7 +338,6 @@ function App() {
               </div>
             </div>
 
-            {/* Products List */}
             {products.length > 0 && (
               <div className="bg-gray-50 rounded-lg p-4">
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Eklenen Ürünler</h3>
@@ -481,7 +415,7 @@ function App() {
                       className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300"
                       required
                     />
-                    <span className="text-gray-700">Kamyon (≤15 ton)</span>
+                    <span className="text-gray-700">Kamyon</span>
                   </label>
                   <label className="flex items-center space-x-3 cursor-pointer">
                     <input
@@ -492,7 +426,7 @@ function App() {
                       onChange={handleChange}
                       className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300"
                     />
-                    <span className="text-gray-700">Tır (&gt;15 ton)</span>
+                    <span className="text-gray-700">Tır</span>
                   </label>
                 </div>
               </div>
@@ -507,6 +441,7 @@ function App() {
                       type="radio"
                       name="shipmentType"
                       value="kendisi"
+                      checked={formData.shipmentType === "kendisi"}
                       onChange={handleChange}
                       className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300"
                       required
@@ -518,6 +453,7 @@ function App() {
                       type="radio"
                       name="shipmentType"
                       value="biz"
+                      checked={formData.shipmentType === "biz"}
                       onChange={handleChange}
                       className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300"
                     />
@@ -527,7 +463,6 @@ function App() {
               </div>
             </div>
 
-            {/* Conditional Fields */}
             {formData.shipmentType === "kendisi" && (
               <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-blue-50 rounded-lg">
                 <div>
@@ -605,7 +540,6 @@ function App() {
                   </div>
                 </div>
                 
-                {/* Delivery Note */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center space-x-2">
                     <MessageSquare className="h-4 w-4" />
@@ -625,7 +559,6 @@ function App() {
             )}
           </div>
 
-          {/* Submit Button */}
           <div className="text-center">
             <button
               type="submit"
@@ -648,9 +581,8 @@ function App() {
           </div>
         </form>
 
-        {/* Footer */}
         <div className="text-center mt-12 text-gray-500">
-          <p>Sipariş formunuz Google Sheets'e otomatik olarak kaydedilecektir.</p>
+          <p>Sipariş formunuz Firebase Firestore'a otomatik olarak kaydedilecektir.</p>
         </div>
       </div>
     </div>
