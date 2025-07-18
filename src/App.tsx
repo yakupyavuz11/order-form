@@ -160,7 +160,7 @@ function App() {
       return;
     }
   
-    const confirmSubmit = window.confirm("SİPARİŞ FORMUNU KAYDETMEYE EMİN MİSİN?");
+    const confirmSubmit = window.confirm("SİPARİŞ KAYDETMEYE EMİN MİSİN?");
     if (!confirmSubmit) {
       return;
     }
